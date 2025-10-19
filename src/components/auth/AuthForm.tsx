@@ -13,6 +13,7 @@ const AuthForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
@@ -30,37 +31,59 @@ const AuthForm = () => {
     setLoading(true);
 
     try {
-      console.log('Attempting sign in for:', email);
-      
-      const { error, data } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      
-      if (error) {
-        console.error('Sign in error:', error);
-        if (error.message.includes('Invalid login credentials')) {
-          throw new Error('Invalid email or password. Please check your credentials and try again.');
-        } else if (error.message.includes('Email not confirmed')) {
-          throw new Error('Please check your email and click the confirmation link before signing in.');
-        } else {
+      if (isSignUp) {
+        console.log('Attempting sign up for:', email);
+
+        const { error, data } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (error) {
+          console.error('Sign up error:', error);
           throw error;
         }
-      }
-      
-      console.log('Sign in successful:', data.user?.email);
-      
-      toast({
-        title: "Welcome back!",
-        description: "You have successfully signed in.",
-      });
 
-      // The AuthContext will handle the redirect automatically
-      
+        console.log('Sign up successful:', data.user?.email);
+
+        toast({
+          title: "Account created!",
+          description: "You have successfully signed up and can now sign in.",
+        });
+
+        setIsSignUp(false);
+
+      } else {
+        console.log('Attempting sign in for:', email);
+
+        const { error, data } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          console.error('Sign in error:', error);
+          if (error.message.includes('Invalid login credentials')) {
+            throw new Error('Invalid email or password. Please check your credentials and try again.');
+          } else if (error.message.includes('Email not confirmed')) {
+            throw new Error('Please check your email and click the confirmation link before signing in.');
+          } else {
+            throw error;
+          }
+        }
+
+        console.log('Sign in successful:', data.user?.email);
+
+        toast({
+          title: "Welcome back!",
+          description: "You have successfully signed in.",
+        });
+      }
+
     } catch (error: any) {
       console.error('Auth form error:', error);
       toast({
-        title: "Sign In Error",
+        title: isSignUp ? "Sign Up Error" : "Sign In Error",
         description: error.message,
         variant: "destructive",
       });
@@ -72,9 +95,11 @@ const AuthForm = () => {
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
-        <CardTitle>Sign In</CardTitle>
+        <CardTitle>{isSignUp ? 'Sign Up' : 'Sign In'}</CardTitle>
         <CardDescription>
-          Enter your credentials to access your notebooks
+          {isSignUp
+            ? 'Create an account to get started'
+            : 'Enter your credentials to access your notebooks'}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -103,8 +128,21 @@ const AuthForm = () => {
             />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Signing In...' : 'Sign In'}
+            {loading
+              ? (isSignUp ? 'Signing Up...' : 'Signing In...')
+              : (isSignUp ? 'Sign Up' : 'Sign In')}
           </Button>
+          <div className="text-center text-sm">
+            <button
+              type="button"
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-blue-600 hover:underline"
+            >
+              {isSignUp
+                ? 'Already have an account? Sign In'
+                : "Don't have an account? Sign Up"}
+            </button>
+          </div>
         </form>
       </CardContent>
     </Card>
