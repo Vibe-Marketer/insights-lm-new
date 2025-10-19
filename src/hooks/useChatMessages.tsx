@@ -264,23 +264,7 @@ export const useChatMessages = (notebookId?: string) => {
     }) => {
       if (!user) throw new Error('User not authenticated');
 
-      // First, save the user message to the database
-      const { error: userMessageError } = await supabase
-        .from('n8n_chat_histories')
-        .insert({
-          session_id: messageData.notebookId,
-          message: {
-            type: 'human',
-            content: messageData.content
-          }
-        });
-
-      if (userMessageError) {
-        console.error('Error saving user message:', userMessageError);
-        throw userMessageError;
-      }
-
-      // Call the webhook (which may be a demo response if not configured)
+      // Call the n8n webhook which will handle saving messages to the database
       const webhookResponse = await supabase.functions.invoke('send-chat-message', {
         body: {
           session_id: messageData.notebookId,
@@ -291,19 +275,6 @@ export const useChatMessages = (notebookId?: string) => {
 
       if (webhookResponse.error) {
         throw new Error(`Webhook error: ${webhookResponse.error.message}`);
-      }
-
-      // If this is a demo response, save it immediately
-      if (webhookResponse.data?.demo && webhookResponse.data?.data?.message) {
-        await supabase
-          .from('n8n_chat_histories')
-          .insert({
-            session_id: messageData.notebookId,
-            message: {
-              type: 'ai',
-              content: webhookResponse.data.data.message
-            }
-          });
       }
 
       return webhookResponse.data;

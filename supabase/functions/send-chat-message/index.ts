@@ -22,24 +22,12 @@ Deno.serve(async (req: Request) => {
     const webhookUrl = Deno.env.get('NOTEBOOK_CHAT_URL');
     const authHeader = Deno.env.get('NOTEBOOK_GENERATION_AUTH');
 
-    if (!webhookUrl || !authHeader) {
-      console.warn('Webhook not configured, returning demo response');
+    if (!webhookUrl) {
+      throw new Error('NOTEBOOK_CHAT_URL environment variable not set');
+    }
 
-      const webhookData = {
-        message: "Chat functionality requires n8n webhook configuration. This is a demo response showing that the chat interface is working, but you'll need to configure the NOTEBOOK_CHAT_URL and NOTEBOOK_GENERATION_AUTH environment variables to connect to an AI chat service.",
-        session_id,
-        demo: true
-      };
-
-      return new Response(
-        JSON.stringify({ success: true, data: webhookData, demo: true }),
-        {
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+    if (!authHeader) {
+      throw new Error('NOTEBOOK_GENERATION_AUTH environment variable not set');
     }
 
     console.log('Sending to webhook with auth header');
