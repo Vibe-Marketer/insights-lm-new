@@ -1,15 +1,17 @@
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+};
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 200,
+      headers: corsHeaders,
+    });
   }
 
   try {
@@ -17,19 +19,16 @@ serve(async (req) => {
     
     console.log(`Process additional sources received ${type} request for notebook ${notebookId}`);
 
-    // Get the webhook URL from Supabase secrets
     const webhookUrl = Deno.env.get('ADDITIONAL_SOURCES_WEBHOOK_URL');
     if (!webhookUrl) {
       throw new Error('ADDITIONAL_SOURCES_WEBHOOK_URL not configured');
     }
 
-    // Get the auth token from Supabase secrets (same as generate-notebook-content)
     const authToken = Deno.env.get('NOTEBOOK_GENERATION_AUTH');
     if (!authToken) {
       throw new Error('NOTEBOOK_GENERATION_AUTH not configured');
     }
 
-    // Prepare the webhook payload
     let webhookPayload;
     
     if (type === 'multiple-websites') {
@@ -37,7 +36,7 @@ serve(async (req) => {
         type: 'multiple-websites',
         notebookId,
         urls,
-        sourceIds, // Array of source IDs corresponding to the URLs
+        sourceIds,
         timestamp
       };
     } else if (type === 'copied-text') {
@@ -46,7 +45,7 @@ serve(async (req) => {
         notebookId,
         title,
         content,
-        sourceId: sourceIds?.[0], // Single source ID for copied text
+        sourceId: sourceIds?.[0],
         timestamp
       };
     } else {
@@ -55,7 +54,6 @@ serve(async (req) => {
 
     console.log('Sending webhook payload:', JSON.stringify(webhookPayload, null, 2));
 
-    // Send to webhook with authentication
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {

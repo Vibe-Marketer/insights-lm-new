@@ -1,18 +1,19 @@
-
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 200,
+      headers: corsHeaders,
+    });
   }
 
   try {
@@ -28,12 +29,10 @@ serve(async (req) => {
       );
     }
 
-    // Parse content if it's a structured AI response
     let textContent = content;
     try {
       const parsed = JSON.parse(content);
       if (parsed.segments && parsed.segments.length > 0) {
-        // Extract text from first few segments
         textContent = parsed.segments
           .slice(0, 3)
           .map((segment: any) => segment.text)
@@ -43,7 +42,6 @@ serve(async (req) => {
       // Content is already plain text
     }
 
-    // Truncate content to avoid token limits
     const truncatedContent = textContent.substring(0, 1000);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
