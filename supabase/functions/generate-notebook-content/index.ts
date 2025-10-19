@@ -27,21 +27,6 @@ Deno.serve(async (req: Request) => {
 
     console.log('Processing request:', { notebookId, filePath, sourceType });
 
-    const webServiceUrl = Deno.env.get('NOTEBOOK_GENERATION_URL');
-    const authHeader = Deno.env.get('NOTEBOOK_GENERATION_AUTH');
-
-    if (!webServiceUrl || !authHeader) {
-      console.error('Missing environment variables:', {
-        hasUrl: !!webServiceUrl,
-        hasAuth: !!authHeader
-      });
-      
-      return new Response(
-        JSON.stringify({ error: 'Web service configuration missing' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -52,7 +37,8 @@ Deno.serve(async (req: Request) => {
       .update({ generation_status: 'generating' })
       .eq('id', notebookId);
 
-    console.log('Calling external web service...');
+    const useCodeBasedGenerator = Deno.env.get('USE_CODE_BASED_GENERATOR') === 'true';
+    console.log('🚦 Feature flag USE_CODE_BASED_GENERATOR:', useCodeBasedGenerator);
 
     let payload: any = {
       sourceType: sourceType
@@ -66,22 +52,57 @@ Deno.serve(async (req: Request) => {
         .select('content')
         .eq('notebook_id', notebookId)
         .single();
-      
+
       if (source?.content) {
         payload.content = source.content.substring(0, 5000);
       }
     }
 
-    console.log('Sending payload to web service:', payload);
+    let response: Response;
+    let generatorUsed: string;
 
-    const response = await fetch(webServiceUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader,
-      },
-      body: JSON.stringify(payload)
-    });
+    if (useCodeBasedGenerator) {
+      console.log('✅ Using NEW code-based generator (generate-notebook-details-v2)');
+      generatorUsed = 'code-based-v2';
+
+      const functionUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-notebook-details-v2`;
+
+      response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      console.log('⚠️  Using OLD n8n webhook (fallback)');
+      generatorUsed = 'n8n-webhook';
+
+      const webServiceUrl = Deno.env.get('NOTEBOOK_GENERATION_URL');
+      const authHeader = Deno.env.get('NOTEBOOK_GENERATION_AUTH');
+
+      if (!webServiceUrl || !authHeader) {
+        console.error('Missing environment variables:', {
+          hasUrl: !!webServiceUrl,
+          hasAuth: !!authHeader
+        });
+
+        return new Response(
+          JSON.stringify({ error: 'Web service configuration missing' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      response = await fetch(webServiceUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader,
+        },
+        body: JSON.stringify(payload)
+      });
+    }
 
     if (!response.ok) {
       console.error('Web service error:', response.status, response.statusText);
@@ -160,16 +181,18 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log('Successfully updated notebook with example questions:', exampleQuestions);
+    console.log(`📊 Generator used: ${generatorUsed}`);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        title, 
+      JSON.stringify({
+        success: true,
+        title,
         description,
         icon: notebookIcon,
         color: backgroundColor,
         exampleQuestions,
-        message: 'Notebook content generated successfully' 
+        generatorUsed,
+        message: 'Notebook content generated successfully'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
